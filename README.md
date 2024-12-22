@@ -1,17 +1,7 @@
-# Algorithmic Trading Strategy Testing Framework
+# Rabbit - An python algo trade project
 
 ## Overview
 A Python-based framework for developing, testing, and optimizing algorithmic trading strategies. The project includes multiple strategy implementations, parameter optimization, and comprehensive performance analysis tools.
-
-## Project Structure
-```
-project/
-│
-├── data.py                 # Data retrieval and processing
-├── strategies.py           # Trading strategy implementations
-├── trend_parameter_tester.py # Parameter optimization for trend strategy
-└── README.md              # This file
-```
 
 ## Features
 
@@ -37,13 +27,6 @@ project/
 pandas
 numpy
 yfinance
-```
-
-## Installation
-1. Clone the repository
-2. Install required packages:
-```bash
-pip install pandas numpy yfinance
 ```
 
 ## Usage
@@ -99,24 +82,12 @@ analysis = tester.analyze_results(results)
 - Trade Count
 - Risk-adjusted Returns
 
-## Best Practices
-1. Always validate strategy parameters before deployment
-2. Use proper position sizing and risk management
-3. Test strategies across different market conditions
-4. Monitor and adjust parameters periodically
-
 ## Future Enhancements
 - Additional strategy implementations
 - Machine learning integration
 - Real-time trading capabilities
 - Portfolio optimization tools
 - Risk management enhancements
-
-## Contributing
-Feel free to contribute to this project by:
-1. Forking the repository
-2. Creating a feature branch
-3. Submitting a pull request
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.
