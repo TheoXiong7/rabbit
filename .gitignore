@@ -1,0 +1,41 @@
+# Mac system files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+
+# Distribution / packaging
+dist/
+build/
+eggs/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Local development settings
+.env
+.env.local
+
+# Logs
+*.log
