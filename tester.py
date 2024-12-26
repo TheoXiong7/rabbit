@@ -3,16 +3,15 @@ import numpy as np
 from typing import Dict, List
 from concurrent.futures import ThreadPoolExecutor
 from data import Data
-from strategies import Breakout, MeanReversion, TrendFollow, Adaptive
+from strategies import Breakout, MeanReversion, TrendFollow, Adaptive, TrendFollowOptimized, TrendFollowEnhanced
 
 class MultiStrategyTester:
     def __init__(self):
         self.data_retriever = Data()
         self.strategies = {
-            'Breakout': Breakout(),
-            'MeanReversion': MeanReversion(),
             'TrendFollow': TrendFollow(),
-            'Adaptive': Adaptive()
+            'TrendFollow Optimized': TrendFollowOptimized(),
+            'TrendFollow Enhanced' : TrendFollowEnhanced()
         }
         
         # Define stock universe
