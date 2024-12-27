@@ -1,8 +1,10 @@
+# strategies.py
 import pandas as pd
 import numpy as np
 from abc import ABC, abstractmethod
 from typing import Dict
 
+# Base Strategy
 class BaseStrategy(ABC):
     @abstractmethod
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -42,8 +44,10 @@ class BaseStrategy(ABC):
             'Max Drawdown': max_drawdown,
             'Final Capital': initial_capital * (1 + total_return)
         }
-    
-class TrendFollowEnhanced(BaseStrategy):
+
+# 3.0
+# even more optimized, and more features.
+class TrendFollow3(BaseStrategy):
     def __init__(
         self,
         volatility_window: int = 20,
@@ -257,8 +261,10 @@ class TrendFollowEnhanced(BaseStrategy):
                 df.loc[df.index[i], 'Entry_Price'] = current_price
         
         return df
-    
-class TrendFollowOptimized(BaseStrategy):
+
+# 2.0
+# more optimized
+class TrendFollow2(BaseStrategy):
     def __init__(
         self,
         volatility_window: int = 20,
@@ -422,7 +428,8 @@ class TrendFollowOptimized(BaseStrategy):
                 df.loc[df.index[i], 'Entry_Price'] = current_price
         
         return df
-    
+
+# Trend Follow Strategy 1.0
 class TrendFollow(BaseStrategy):
     def __init__(
         self,
@@ -520,147 +527,218 @@ class TrendFollow(BaseStrategy):
         
         return df
 
-class MeanReversion(BaseStrategy):
-    def __init__(self, bb_period: int = 20, bb_std: float = 2.0, rsi_period: int = 14):
-        self.bb_period = bb_period
-        self.bb_std = bb_std
-        self.rsi_period = rsi_period
-
-    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = df.copy()
-        
-        # Calculate Bollinger Bands
-        df['BB_Middle'] = df['Close'].rolling(window=self.bb_period).mean()
-        rolling_std = df['Close'].rolling(window=self.bb_period).std()
-        df['BB_Upper'] = df['BB_Middle'] + (rolling_std * self.bb_std)
-        df['BB_Lower'] = df['BB_Middle'] - (rolling_std * self.bb_std)
-        
-        # Calculate RSI
-        delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=self.rsi_period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=self.rsi_period).mean()
-        rs = gain / loss
-        df['RSI'] = 100 - (100 / (1 + rs))
-        
-        return df
-
-    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = self.calculate_indicators(df)
-        df['Signal'] = 0
-        
-        for i in range(1, len(df)):
-            # Enhanced oversold conditions with price confirmation
-            oversold = (
-                df['Close'].iloc[i] < df['BB_Lower'].iloc[i] and 
-                df['RSI'].iloc[i] < 30 and
-                df['Close'].iloc[i] > df['Close'].iloc[i-1]  # Price starting to recover
-            )
-            
-            # Enhanced overbought conditions with price confirmation
-            overbought = (
-                df['Close'].iloc[i] > df['BB_Upper'].iloc[i] and 
-                df['RSI'].iloc[i] > 70 and
-                df['Close'].iloc[i] < df['Close'].iloc[i-1]  # Price starting to fall
-            )
-            
-            if oversold:
-                df.loc[df.index[i], 'Signal'] = 1
-            elif overbought:
-                df.loc[df.index[i], 'Signal'] = -1
-                
-            # Add exit conditions
-            elif df['Signal'].iloc[i-1] == 1 and df['RSI'].iloc[i] > 50:
-                df.loc[df.index[i], 'Signal'] = -1  # Exit long position
-            elif df['Signal'].iloc[i-1] == -1 and df['RSI'].iloc[i] < 50:
-                df.loc[df.index[i], 'Signal'] = 1  # Exit short position
-                
-        return df
-
-class Breakout(BaseStrategy):
-    def __init__(self, channel_period: int = 20, volume_factor: float = 2.0):
-        self.channel_period = channel_period
-        self.volume_factor = volume_factor
-
-    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = df.copy()
-        
-        # Calculate price channels
-        df['Upper_Channel'] = df['High'].rolling(window=self.channel_period).max()
-        df['Lower_Channel'] = df['Low'].rolling(window=self.channel_period).min()
-        
-        # Calculate volume indicators
-        df['Volume_MA'] = df['Volume'].rolling(window=20).mean()
-        df['Volume_Ratio'] = df['Volume'] / df['Volume_MA']
-        
-        return df
-
-    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
-        df = self.calculate_indicators(df)
-        df['Signal'] = 0
-        
-        for i in range(1, len(df)):
-            # Breakout conditions
-            breakout_up = (df['Close'].iloc[i] > df['Upper_Channel'].iloc[i-1] and 
-                         df['Volume_Ratio'].iloc[i] > self.volume_factor)
-            
-            breakout_down = (df['Close'].iloc[i] < df['Lower_Channel'].iloc[i-1] and 
-                           df['Volume_Ratio'].iloc[i] > self.volume_factor)
-            
-            if breakout_up:
-                df.loc[df.index[i], 'Signal'] = 1
-            elif breakout_down:
-                df.loc[df.index[i], 'Signal'] = -1
-                
-        return df
-
-class Adaptive(BaseStrategy):
-    def __init__(self, volatility_window: int = 20, volume_window: int = 20):
+# Dev strategy
+class TrendFollowDev(BaseStrategy):
+    def __init__(
+        self,
+        volatility_window: int = 15,
+        volume_window: int = 15,
+        high_vol_threshold: float = 0.28,
+        low_vol_threshold: float = 0.17,
+        market_cap: str = 'mid',  # 'mid' or 'large'
+        # High volatility parameters
+        high_vol_fast_ema: int = 6,  # Faster for mid-caps
+        high_vol_slow_ema: int = 20,  # Shorter trend window
+        high_vol_volume_threshold: float = 1.8,  # More aggressive volume filter
+        high_vol_profit_target: float = 0.23,  # Higher profit target
+        high_vol_stop_loss: float = 0.07,  # Wider stop for volatility
+        # Medium volatility parameters
+        med_vol_fast_ema: int = 9,
+        med_vol_slow_ema: int = 28,
+        med_vol_volume_threshold: float = 1.4,
+        med_vol_profit_target: float = 0.13,
+        med_vol_stop_loss: float = 0.04,
+        # Low volatility parameters
+        low_vol_fast_ema: int = 11,
+        low_vol_slow_ema: int = 35,
+        low_vol_volume_threshold: float = 1.1,
+        low_vol_profit_target: float = 0.11,
+        low_vol_stop_loss: float = 0.02,
+        # MACD parameters
+        macd_fast: int = 12,
+        macd_slow: int = 26,
+        macd_signal: int = 9
+    ):
+        super().__init__()
         self.volatility_window = volatility_window
         self.volume_window = volume_window
-        self.trend_strategy = TrendFollow()
-        self.mean_rev_strategy = MeanReversion()
+        self.high_vol_threshold = high_vol_threshold
+        self.low_vol_threshold = low_vol_threshold
+        self.market_cap = market_cap
+        
+        # Adjust parameters based on market cap
+        if market_cap == 'mid':
+            # More aggressive parameters for mid-caps
+            high_vol_fast_ema = 6
+            high_vol_slow_ema = 20
+            high_vol_profit_target = 0.23
+            high_vol_volume_threshold = 1.8
+        
+        # Store volatility-based parameters
+        self.vol_params = {
+            'high': {
+                'fast_ema': high_vol_fast_ema,
+                'slow_ema': high_vol_slow_ema,
+                'volume_threshold': high_vol_volume_threshold,
+                'profit_target': high_vol_profit_target,
+                'stop_loss': high_vol_stop_loss
+            },
+            'medium': {
+                'fast_ema': med_vol_fast_ema,
+                'slow_ema': med_vol_slow_ema,
+                'volume_threshold': med_vol_volume_threshold,
+                'profit_target': med_vol_profit_target,
+                'stop_loss': med_vol_stop_loss
+            },
+            'low': {
+                'fast_ema': low_vol_fast_ema,
+                'slow_ema': low_vol_slow_ema,
+                'volume_threshold': low_vol_volume_threshold,
+                'profit_target': low_vol_profit_target,
+                'stop_loss': low_vol_stop_loss
+            }
+        }
+        
+        self.macd_fast = macd_fast
+        self.macd_slow = macd_slow
+        self.macd_signal = macd_signal
+
+    def _calculate_market_conditions(self, df: pd.DataFrame) -> tuple:
+        """Calculate market conditions including volatility and volume regimes"""
+        # Calculate annualized volatility
+        volatility = df['Returns'].rolling(window=self.volatility_window).std() * np.sqrt(252)
+        
+        # Calculate volume regime
+        volume_ma = df['Volume'].rolling(window=self.volume_window).mean()
+        volume_ratio = df['Volume'] / volume_ma
+        
+        # Determine volume regime (prefer extremes, avoid medium)
+        if volume_ratio.iloc[-1] > 1.8:
+            volume_regime = 'high'
+        elif volume_ratio.iloc[-1] < 0.7:
+            volume_regime = 'low'
+        else:
+            volume_regime = 'medium'
+            
+        # Determine volatility regime
+        if volatility.iloc[-1] >= self.high_vol_threshold:
+            vol_regime = 'high'
+        elif volatility.iloc[-1] <= self.low_vol_threshold:
+            vol_regime = 'low'
+        else:
+            vol_regime = 'medium'
+            
+        return vol_regime, volume_regime, volatility.iloc[-1]
 
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
         
-        # Calculate volatility
-        df['Volatility'] = df['Close'].pct_change().rolling(window=self.volatility_window).std()
-        df['Volatility_MA'] = df['Volatility'].rolling(window=self.volatility_window).mean()
+        # Calculate market conditions
+        vol_regime, volume_regime, current_vol = self._calculate_market_conditions(df)
+        params = self.vol_params[vol_regime]
         
-        # Calculate volume trend
+        # Adjust parameters based on volume regime
+        if volume_regime != 'medium':  # Prefer trading in high/low volume
+            params['volume_threshold'] *= 0.9  # More lenient volume threshold
+        else:
+            params['volume_threshold'] *= 1.2  # Stricter threshold in medium volume
+        
+        # Calculate core indicators
+        df['EMA_fast'] = df['Close'].ewm(span=params['fast_ema'], adjust=False).mean()
+        df['EMA_slow'] = df['Close'].ewm(span=params['slow_ema'], adjust=False).mean()
+        df['EMA_diff'] = (df['EMA_fast'] - df['EMA_slow']) / df['EMA_slow'] * 100
+        
+        # Enhanced MACD with market cap adjustment
+        if self.market_cap == 'mid':
+            # More responsive MACD for mid-caps
+            df['MACD'] = (df['Close'].ewm(span=10, adjust=False).mean() - 
+                         df['Close'].ewm(span=20, adjust=False).mean())
+        else:
+            df['MACD'] = (df['Close'].ewm(span=self.macd_fast, adjust=False).mean() - 
+                         df['Close'].ewm(span=self.macd_slow, adjust=False).mean())
+        
+        df['MACD_Signal'] = df['MACD'].ewm(span=self.macd_signal, adjust=False).mean()
+        df['MACD_Hist'] = df['MACD'] - df['MACD_Signal']
+        
+        # Volume indicators
         df['Volume_MA'] = df['Volume'].rolling(window=self.volume_window).mean()
         df['Volume_Ratio'] = df['Volume'] / df['Volume_MA']
         
-        # Get signals from both strategies
-        df_trend = self.trend_strategy.generate_signals(df)
-        df_mean_rev = self.mean_rev_strategy.generate_signals(df)
-        
-        df['Trend_Signal'] = df_trend['Signal']
-        df['MeanRev_Signal'] = df_mean_rev['Signal']
+        # Store current parameters and conditions
+        df['Current_Profit_Target'] = params['profit_target']
+        df['Current_Stop_Loss'] = params['stop_loss']
+        df['Current_Volume_Threshold'] = params['volume_threshold']
+        df['Volatility_Regime'] = vol_regime
+        df['Volume_Regime'] = volume_regime
         
         return df
 
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
         df = self.calculate_indicators(df)
         df['Signal'] = 0
+        df['Entry_Price'] = 0.0
+        last_signal = 0
+        entry_price = 0.0
         
         for i in range(1, len(df)):
-            high_volatility = df['Volatility'].iloc[i] > df['Volatility_MA'].iloc[i]
-            rising_volume = (df['Volume'].iloc[i] > df['Volume'].iloc[i-1] and 
-                           df['Volume_Ratio'].iloc[i] > 1.2)
+            current_price = df['Close'].iloc[i]
             
-            # Calculate trend strength
-            price_trend = (df['Close'].iloc[i] - df['Close'].iloc[max(0, i-5)]) / df['Close'].iloc[max(0, i-5)]
-            strong_trend = abs(price_trend) > 0.02  # 2% price movement in 5 days
+            # Get current parameters
+            profit_target = df['Current_Profit_Target'].iloc[i]
+            stop_loss = df['Current_Stop_Loss'].iloc[i]
+            volume_threshold = df['Current_Volume_Threshold'].iloc[i]
             
-            if strong_trend and rising_volume:
-                # Use trend following in strong trends with rising volume
-                df.loc[df.index[i], 'Signal'] = df['Trend_Signal'].iloc[i]
-            elif not strong_trend and not high_volatility:
-                # Use mean reversion in ranging markets
-                df.loc[df.index[i], 'Signal'] = df['MeanRev_Signal'].iloc[i]
-            elif df['Trend_Signal'].iloc[i] == df['MeanRev_Signal'].iloc[i] and df['Trend_Signal'].iloc[i] != 0:
-                # When both strategies agree, take the signal
-                df.loc[df.index[i], 'Signal'] = df['Trend_Signal'].iloc[i]
+            # Position management
+            if last_signal != 0:
+                price_change = (current_price - entry_price) / entry_price
                 
+                # Dynamic exit based on market conditions
+                if df['Volume_Regime'].iloc[i] == 'high':
+                    # Be more patient with exits in high volume
+                    profit_target *= 1.2
+                    stop_loss *= 1.1
+                
+                # Check exits
+                if (last_signal == 1 and (price_change <= -stop_loss or price_change >= profit_target)) or \
+                   (last_signal == -1 and (-price_change <= -stop_loss or -price_change >= profit_target)):
+                    df.loc[df.index[i], 'Signal'] = -last_signal
+                    last_signal = 0
+                    continue
+            
+            # Enhanced trend conditions
+            trend_up = (df['EMA_fast'].iloc[i] > df['EMA_slow'].iloc[i] and 
+                       df['MACD_Hist'].iloc[i] > 0 and
+                       df['MACD_Hist'].iloc[i] > df['MACD_Hist'].iloc[i-1])
+            
+            trend_down = (df['EMA_fast'].iloc[i] < df['EMA_slow'].iloc[i] and 
+                         df['MACD_Hist'].iloc[i] < 0 and
+                         df['MACD_Hist'].iloc[i] < df['MACD_Hist'].iloc[i-1])
+            
+            # Volume confirmation
+            volume_confirmed = df['Volume_Ratio'].iloc[i] > volume_threshold
+            
+            # Trend strength with market cap adjustment
+            trend_strength = abs(df['EMA_diff'].iloc[i]) > (0.4 if self.market_cap == 'mid' else 0.6)
+            
+            # Signal generation with market condition adjustments
+            if last_signal == 0:  # Not in a position
+                # More aggressive in high volume regimes
+                if df['Volume_Regime'].iloc[i] == 'high':
+                    trend_strength_threshold = 0.8 * (0.4 if self.market_cap == 'mid' else 0.6)
+                else:
+                    trend_strength_threshold = (0.4 if self.market_cap == 'mid' else 0.6)
+                
+                if trend_up and volume_confirmed and abs(df['EMA_diff'].iloc[i]) > trend_strength_threshold:
+                    df.loc[df.index[i], 'Signal'] = 1
+                    last_signal = 1
+                    entry_price = current_price
+                elif trend_down and volume_confirmed and abs(df['EMA_diff'].iloc[i]) > trend_strength_threshold:
+                    df.loc[df.index[i], 'Signal'] = -1
+                    last_signal = -1
+                    entry_price = current_price
+            
+            # Track entry prices
+            if df['Signal'].iloc[i] != 0:
+                df.loc[df.index[i], 'Entry_Price'] = current_price
+        
         return df

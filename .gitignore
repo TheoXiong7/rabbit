@@ -39,3 +39,7 @@ ENV/
 
 # Logs
 *.log
+
+# API keys & misc
+key.txt
+notes.txt
