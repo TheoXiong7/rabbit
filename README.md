@@ -40,8 +40,47 @@ yfinance
 - Risk-adjusted Returns
 
 
-## Backtest Returns
-![alt text](https://github.com/TheoXiong7/rabbit/blob/main/images/carbon.png?raw=true)
+## Sample Backtest Returns
+```
+Developmental Strategy:
+
+==================== 1Y Period ====================
+
+Mean Dollar Return: $2,611.07
+Mean Percent Return: 52.22%
+Total Entries: 2,070
+Total Exits: 1,755
+Total Actions: 3,825
+Mean Sharpe Ratio: 1.15
+Win Rate: 86.03%
+Return Std Dev: 115.02%
+
+==================== 2Y Period ====================
+
+Developmental Strategy:
+Mean Dollar Return: $9,228.58
+Mean Percent Return: 184.57%
+Total Entries: 4,253
+Total Exits: 3,427
+Total Actions: 7,680
+Mean Sharpe Ratio: 1.13
+Win Rate: 92.65%
+Return Std Dev: 532.48%
+
+==================== 5Y Period ====================
+
+Developmental Strategy:
+Mean Dollar Return: $1,453,675.07
+Mean Percent Return: 29073.50%
+Total Entries: 12,283
+Total Exits: 9,536
+Total Actions: 21,819
+Mean Sharpe Ratio: 1.48
+Win Rate: 98.53%
+Return Std Dev: 195330.89%
+
+===================================================
+```
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.
