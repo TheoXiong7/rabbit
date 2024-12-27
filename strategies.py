@@ -527,7 +527,7 @@ class TrendFollow(BaseStrategy):
         
         return df
 
-# Dev strategy
+# Dev strategy (optimized 3.0)
 class TrendFollowDev(BaseStrategy):
     def __init__(
         self,

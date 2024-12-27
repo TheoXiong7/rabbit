@@ -1,4 +1,5 @@
-# optimizer.pt
+# optimizer.py
+# optimizes strategy parameter using gridsearch
 import numpy as np
 from strategies import TrendFollow3
 
