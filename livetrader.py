@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import time
 import logging
 from typing import Dict, List
+from strategies import TrendFollowDev
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('AlpacaTrader')
