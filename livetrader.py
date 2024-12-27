@@ -1,5 +1,5 @@
-# livetrader.py
 from alpaca.trading.client import TradingClient
+from alpaca.trading.enums import PositionSide
 from alpaca.trading.requests import GetAssetsRequest, MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce, AssetClass
 from alpaca.data.historical import StockHistoricalDataClient
@@ -24,17 +24,26 @@ class AlpacaTrader:
         
         # Universe setup
         self.stock_universe = {
-            'Tech Large-Cap': ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'META', 'AVGO', 'CSCO'],
-            'Tech Mid-Cap': ['AMD', 'CRWD', 'SNOW', 'NET', 'FTNT', 'PANW', 'DDOG'],
-            'Finance Large-Cap': ['JPM', 'BAC', 'GS', 'MS', 'BLK', 'SCHW'],
-            'Finance Mid-Cap': ['COIN', 'RJF', 'LPLA', 'FDS'],
-            'Healthcare Large-Cap': ['JNJ', 'PFE', 'UNH', 'ABBV', 'LLY', 'TMO'],
-            'Healthcare Mid-Cap': ['HOLX', 'CRL', 'WST', 'MTD'],
-            'Consumer Staples': ['WMT', 'PG', 'KO', 'MCD', 'COST', 'PEP'],
-            'Consumer Discretionary': ['AMZN', 'TSLA', 'NKE', 'SBUX', 'TJX'],
-            'Industrial': ['CAT', 'DE', 'BA', 'HON', 'URI', 'PWR'],
-            'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG'],
-            'Materials': ['LIN', 'APD', 'ECL', 'FCX', 'NUE']
+            'Tech Large-Cap': ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'META', 'AVGO', 'CSCO', 'ORCL',
+                               'PLTR', 'INTC', 'CRM', 'ADBE', 'ACN'],
+            'Tech Mid-Cap': ['AMD', 'CRWD', 'SNOW', 'NET', 'FTNT', 'PANW', 'DDOG', 'ZS', 'SNPS', 
+                             'CDNS', 'QUBT', 'RGTI', 'QS', 'IONQ', 'RIVN', 'LUNR', 'LCID', 'CFLT',
+                             'GTLB', 'TTD'],
+            'Finance Large-Cap': ['JPM', 'BAC', 'GS', 'MS', 'BLK', 'SCHW', 'C', 'WFC', 'V', 'MA',
+                                  'AXP'],
+            'Finance Mid-Cap': ['COIN', 'HOOD', 'RJF', 'SEIC', 'LPLA', 'FDS', 'SOFI', 'AFRM'],
+            'Healthcare Large-Cap': ['JNJ', 'PFE', 'UNH', 'ABBV', 'LLY', 'TMO', 'DHR', 'BMY'],
+            'Healthcare Mid-Cap': ['HOLX', 'VTRS', 'CRL', 'ICLR', 'WST', 'MTD', 'ENVX', 'TDOC',
+                                   'VEEV'],
+            'Consumer Staples': ['WMT', 'PG', 'KO', 'MCD', 'COST', 'PEP', 'TGT', 'DG'],
+            'Consumer Discretionary': ['AMZN', 'TSLA', 'NKE', 'SBUX', 'TJX', 'BKNG', 'MAR'],
+            'Industrial Large-Cap': ['CAT', 'DE', 'BA', 'HON', 'UNP', 'RTX', 'GE', 'MMM'],
+            'Industrial Mid-Cap': ['URI', 'PWR', 'FAST', 'GGG', 'RBC', 'EME', 'IRBT', 'BE'],
+            'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX'],
+            'Materials': ['LIN', 'APD', 'ECL', 'NEM', 'FCX', 'DOW', 'NUE'],
+            'Utilities': ['NEE', 'DUK', 'SO', 'D', 'SRE', 'AEP', 'XEL', 'PCG'],
+            'Real Estate': ['PLD', 'AMT', 'EQIX', 'PSA', 'O', 'WELL', 'AVB'],
+            'Communication': ['VZ', 'T', 'CMCSA', 'NFLX', 'DIS', 'TMUS', 'CHTR']
         }
         
         self.position_size = 0.1  # 10% of portfolio per position
@@ -99,7 +108,8 @@ class AlpacaTrader:
                 last_signal = signals['Signal'].iloc[-1]
                 
                 # Check for exit signal
-                if last_signal == -1 * float(position.side):  # Exit signal
+                if ((last_signal == -1 and position.side == PositionSide.LONG) or 
+    (last_signal == 1 and position.side == PositionSide.SHORT)):  # Exit signal
                     self.trading_client.submit_order(
                         MarketOrderRequest(
                             symbol=position.symbol,
