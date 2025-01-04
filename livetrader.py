@@ -25,14 +25,16 @@ class AlpacaTrader:
         # Universe setup
         self.stock_universe = {
             'Tech Large-Cap': ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'META', 'AVGO', 'CSCO', 'ORCL',
-                               'PLTR', 'INTC', 'CRM', 'ADBE', 'ACN'],
-            'Tech Mid-Cap': ['AMD', 'CRWD', 'SNOW', 'NET', 'FTNT', 'PANW', 'DDOG', 'ZS', 'SNPS', 
+                               'PLTR', 'INTC', 'CRM', 'ADBE', 'ACN', 'SMCI', 'MU', 'AMD', 'ON',
+                               'QCOM', 'UMC', 'MRVL', 'SNOW', 'AMAT', 'TSN'],
+            'Tech Mid-Cap': ['CRWD', 'NET', 'FTNT', 'PANW', 'DDOG', 'ZS', 'SNPS', 
                              'CDNS', 'QUBT', 'RGTI', 'QS', 'IONQ', 'RIVN', 'LUNR', 'LCID', 'CFLT',
-                             'GTLB', 'TTD'],
+                             'GTLB', 'TTD', 'SOUN', 'QBTS', 'AI', 'S', 'QRVO', 'GTLB'],
             'Finance Large-Cap': ['JPM', 'BAC', 'GS', 'MS', 'BLK', 'SCHW', 'C', 'WFC', 'V', 'MA',
                                   'AXP'],
             'Finance Mid-Cap': ['COIN', 'HOOD', 'RJF', 'SEIC', 'LPLA', 'FDS', 'SOFI', 'AFRM'],
-            'Healthcare Large-Cap': ['JNJ', 'PFE', 'UNH', 'ABBV', 'LLY', 'TMO', 'DHR', 'BMY'],
+            'Healthcare Large-Cap': ['JNJ', 'PFE', 'UNH', 'ABBV', 'LLY', 'TMO', 'DHR', 'BMY', 'MRNA',
+                                     'MDT', 'BAX'],
             'Healthcare Mid-Cap': ['HOLX', 'VTRS', 'CRL', 'ICLR', 'WST', 'MTD', 'ENVX', 'TDOC',
                                    'VEEV'],
             'Consumer Staples': ['WMT', 'PG', 'KO', 'MCD', 'COST', 'PEP', 'TGT', 'DG'],
@@ -173,12 +175,13 @@ class AlpacaTrader:
                 except Exception as e:
                     logger.error(f"Error scanning {symbol}: {str(e)}")
 
-    def run(self, interval: int = 300):
+    def run(self, interval: int = 60):
         """Main trading loop"""
         logger.info("Starting trading loop...")
         
         while True:
             try:
+                print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                 if self.check_market_hours():
                     logger.info("Market is open, running strategy...")
                     
@@ -198,7 +201,96 @@ class AlpacaTrader:
             except Exception as e:
                 logger.error(f"Error in main loop: {str(e)}")
                 time.sleep(60)  # Wait before retry
-    
+
+    def display_metrics(self, days: int = 30):
+        """
+        Display trading metrics and signals for all stocks in universe
+        
+        Args:
+            days (int): Number of days to look back
+        """
+        try:
+            logger.info("\n" + "="*80)
+            logger.info(f"TRADING METRICS SUMMARY - {days} Day Analysis")
+            logger.info("="*80)
+
+            # Store metrics for all stocks
+            all_metrics = []
+            
+            for sector, symbols in self.stock_universe.items():
+                logger.info(f"\n{sector} Sector Analysis:")
+                logger.info("-"*80)
+                
+                sector_metrics = []
+                for symbol in symbols:
+                    # Get historical data and signals
+                    data = self.get_historical_data(symbol, days)
+                    if data is None:
+                        continue
+                        
+                    signals = self.strategy.generate_signals(data)
+                    
+                    # Calculate key metrics
+                    metrics = {
+                        'Symbol': symbol,
+                        'Current_Price': signals['Close'].iloc[-1],
+                        'Latest_Signal': signals['Signal'].iloc[-1],
+                        'Buy_Signals': len(signals[signals['Signal'] == 1]),
+                        'Sell_Signals': len(signals[signals['Signal'] == -1]),
+                        'Avg_Return': signals[signals['Signal'] != 0]['Returns'].mean() * 100,
+                        'Volatility': signals['Returns'].std() * np.sqrt(252) * 100,
+                        'Volume': signals['Volume'].mean(),
+                        'High': signals['High'].max(),
+                        'Low': signals['Low'].min()
+                    }
+                    sector_metrics.append(metrics)
+                    
+                    # Format signal display
+                    signal_text = {1: '🟢 BUY', -1: '🔴 SELL', 0: '⚪ HOLD'}[metrics['Latest_Signal']]
+                    
+                    # Display individual stock metrics
+                    logger.info(f"\n{symbol:<6} | Price: ${metrics['Current_Price']:,.2f} | Signal: {signal_text}")
+                    logger.info(f"       | Buy Signals: {metrics['Buy_Signals']} | Sell Signals: {metrics['Sell_Signals']}")
+                    logger.info(f"       | Avg Return: {metrics['Avg_Return']:,.2f}% | Volatility: {metrics['Volatility']:,.2f}%")
+                    
+                # Calculate and display sector summary
+                if sector_metrics:
+                    sector_df = pd.DataFrame(sector_metrics)
+                    logger.info(f"\n{sector} Summary:")
+                    logger.info(f"Total Buy Signals: {sector_df['Buy_Signals'].sum()}")
+                    logger.info(f"Total Sell Signals: {sector_df['Sell_Signals'].sum()}")
+                    logger.info(f"Average Sector Return: {sector_df['Avg_Return'].mean():,.2f}%")
+                    logger.info(f"Average Sector Volatility: {sector_df['Volatility'].mean():,.2f}%")
+                    
+                    # Store for overall summary
+                    all_metrics.extend(sector_metrics)
+            
+            # Overall market summary
+            if all_metrics:
+                market_df = pd.DataFrame(all_metrics)
+                logger.info("\n" + "="*80)
+                logger.info("OVERALL MARKET SUMMARY")
+                logger.info("="*80)
+                logger.info(f"Total Stocks Analyzed: {len(market_df)}")
+                logger.info(f"Current Buy Signals: {len(market_df[market_df['Latest_Signal'] == 1])}")
+                logger.info(f"Current Sell Signals: {len(market_df[market_df['Latest_Signal'] == -1])}")
+                logger.info(f"Average Market Return: {market_df['Avg_Return'].mean():,.2f}%")
+                logger.info(f"Average Market Volatility: {market_df['Volatility'].mean():,.2f}%")
+                
+                # Display top opportunities
+                logger.info("\nTop 5 Buy Opportunities:")
+                buy_opps = market_df[market_df['Latest_Signal'] == 1].nlargest(5, 'Avg_Return')
+                for _, row in buy_opps.iterrows():
+                    logger.info(f"{row['Symbol']:<6} | Return: {row['Avg_Return']:,.2f}% | Volatility: {row['Volatility']:,.2f}%")
+                
+                logger.info("\nTop 5 Sell Signals:")
+                sell_opps = market_df[market_df['Latest_Signal'] == -1].nsmallest(5, 'Avg_Return')
+                for _, row in sell_opps.iterrows():
+                    logger.info(f"{row['Symbol']:<6} | Return: {row['Avg_Return']:,.2f}% | Volatility: {row['Volatility']:,.2f}%")
+                    
+        except Exception as e:
+            logger.error(f"Error displaying metrics: {str(e)}")
+
     def display_portfolio_status(self):
         """Display current portfolio status"""
         try:
@@ -256,4 +348,5 @@ if __name__ == "__main__":
     
     # Initialize and run trader
     trader = AlpacaTrader(strategy, api_key, api_secret, paper=True)
+    #trader.display_metrics()
     trader.run()

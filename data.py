@@ -93,7 +93,85 @@ class Data:
         """
         return {symbol: self.get_historical_data(symbol, period, interval) 
                 for symbol in symbols}
+class DataMinutes:
+    def __init__(self):
+        self.cache = {}
+        
+    def get_intraday_data(self, symbol: str, period: str, interval: str = "1h") -> pd.DataFrame:
+        """
+        Fetch intraday data by chunking requests for minute data.
+        For hourly data, fetch directly.
+        """
+        try:
+            if interval == "1h":
+                # Hourly data can be fetched directly
+                stock = yf.Ticker(symbol)
+                df = stock.history(period=period, interval=interval)
+                if df.empty:
+                    logger.error(f"No data retrieved for {symbol}")
+                    return None
+                
+                df['Returns'] = df['Close'].pct_change()
+                return df
+                
+            elif interval == "1m":
+                # For minute data, we need to fetch in 7-day chunks
+                end_date = datetime.now()
+                if period == "3mo":
+                    start_date = end_date - timedelta(days=90)
+                elif period == "6mo":
+                    start_date = end_date - timedelta(days=180)
+                else:
+                    start_date = end_date - timedelta(days=30)  # default
+                
+                # Initialize empty list to store chunks
+                chunks = []
+                current_end = end_date
+                current_start = max(current_end - timedelta(days=7), start_date)
+                
+                while current_start >= start_date:
+                    try:
+                        stock = yf.Ticker(symbol)
+                        chunk = stock.history(
+                            start=current_start,
+                            end=current_end,
+                            interval="1m"
+                        )
+                        if not chunk.empty:
+                            chunks.append(chunk)
+                        
+                        # Move window back
+                        current_end = current_start
+                        current_start = max(current_end - timedelta(days=7), start_date)
+                        
+                        # Add delay to avoid rate limiting
+                        time.sleep(1)
+                        
+                    except Exception as e:
+                        logger.error(f"Error fetching chunk for {symbol}: {str(e)}")
+                        continue
+                
+                if not chunks:
+                    logger.error(f"No data chunks retrieved for {symbol}")
+                    return None
+                
+                # Combine chunks and sort by index
+                df = pd.concat(chunks).sort_index()
+                df['Returns'] = df['Close'].pct_change()
+                return df
+                
+        except Exception as e:
+            logger.error(f"Error retrieving data for {symbol}: {str(e)}")
+            return None
 
+    def get_hourly_data(self, symbol: str, period: str) -> pd.DataFrame:
+        """Convenience method for hourly data"""
+        return self.get_intraday_data(symbol, period, interval="1h")
+        
+    def get_minute_data(self, symbol: str, period: str) -> pd.DataFrame:
+        """Convenience method for minute data"""
+        return self.get_intraday_data(symbol, period, interval="1m")
+    
 # Example usage
 if __name__ == "__main__":
     retriever = Data()

@@ -25,14 +25,16 @@ class MultiStrategyTester:
         # Stock universe remains the same...
         self.stock_universe = {
             'Tech Large-Cap': ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'META', 'AVGO', 'CSCO', 'ORCL',
-                               'PLTR', 'INTC', 'CRM', 'ADBE', 'ACN'],
-            'Tech Mid-Cap': ['AMD', 'CRWD', 'SNOW', 'NET', 'FTNT', 'PANW', 'DDOG', 'ZS', 'SNPS', 
+                               'PLTR', 'INTC', 'CRM', 'ADBE', 'ACN', 'SMCI', 'MU', 'AMD', 'ON',
+                               'QCOM', 'UMC', 'MRVL', 'SNOW', 'AMAT', 'TSN'],
+            'Tech Mid-Cap': ['CRWD', 'NET', 'FTNT', 'PANW', 'DDOG', 'ZS', 'SNPS', 
                              'CDNS', 'QUBT', 'RGTI', 'QS', 'IONQ', 'RIVN', 'LUNR', 'LCID', 'CFLT',
-                             'GTLB', 'TTD'],
+                             'GTLB', 'TTD', 'SOUN', 'QBTS', 'AI', 'S', 'QRVO', 'GTLB'],
             'Finance Large-Cap': ['JPM', 'BAC', 'GS', 'MS', 'BLK', 'SCHW', 'C', 'WFC', 'V', 'MA',
                                   'AXP'],
             'Finance Mid-Cap': ['COIN', 'HOOD', 'RJF', 'SEIC', 'LPLA', 'FDS', 'SOFI', 'AFRM'],
-            'Healthcare Large-Cap': ['JNJ', 'PFE', 'UNH', 'ABBV', 'LLY', 'TMO', 'DHR', 'BMY'],
+            'Healthcare Large-Cap': ['JNJ', 'PFE', 'UNH', 'ABBV', 'LLY', 'TMO', 'DHR', 'BMY', 'MRNA',
+                                     'MDT', 'BAX'],
             'Healthcare Mid-Cap': ['HOLX', 'VTRS', 'CRL', 'ICLR', 'WST', 'MTD', 'ENVX', 'TDOC',
                                    'VEEV'],
             'Consumer Staples': ['WMT', 'PG', 'KO', 'MCD', 'COST', 'PEP', 'TGT', 'DG'],
@@ -174,8 +176,9 @@ class MultiStrategyTester:
         return analysis
 
 if __name__ == "__main__":
+    # Daily backtest
     # Initialize and run tests
-    initial_capital = 5000
+    initial_capital = 10000
     tester = MultiStrategyTester()
     print(f"Testing all strategies across multiple stocks with ${initial_capital:,} initial capital...")
     
