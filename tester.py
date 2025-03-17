@@ -22,7 +22,7 @@ class MultiStrategyTester:
             '5Y': "5y"
         }
         
-        # Stock universe remains the same...
+        # Stock universe remains the same
         self.stock_universe = {
             'Tech Large-Cap': ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'META', 'AVGO', 'CSCO', 'ORCL',
                                'PLTR', 'INTC', 'CRM', 'ADBE', 'ACN', 'SMCI', 'MU', 'AMD', 'ON',
