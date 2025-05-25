@@ -1,3 +1,4 @@
+# livetrader.py
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import PositionSide
 from alpaca.trading.requests import GetAssetsRequest, MarketOrderRequest
@@ -11,7 +12,8 @@ from datetime import datetime, timedelta
 import time
 import logging
 from typing import Dict, List
-from strategies import TrendFollowDev
+from strategies import RobustTrend3
+from performance_tracker import PerformanceTracker
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('AlpacaTrader')
@@ -21,6 +23,8 @@ class AlpacaTrader:
         self.strategy = strategy
         self.trading_client = TradingClient(api_key, api_secret, paper=paper)
         self.data_client = StockHistoricalDataClient(api_key, api_secret)
+        self.performance_tracker = PerformanceTracker()
+        self.strategy_name = strategy.__class__.__name__
         
         # Universe setup
         self.stock_universe = {
@@ -112,7 +116,8 @@ class AlpacaTrader:
                 # Check for exit signal
                 if ((last_signal == -1 and position.side == PositionSide.LONG) or 
     (last_signal == 1 and position.side == PositionSide.SHORT)):  # Exit signal
-                    self.trading_client.submit_order(
+                    
+                    order = self.trading_client.submit_order(
                         MarketOrderRequest(
                             symbol=position.symbol,
                             qty=abs(float(position.qty)),
@@ -120,7 +125,23 @@ class AlpacaTrader:
                             time_in_force=TimeInForce.DAY
                         )
                     )
-                    logger.info(f"Closed position in {position.symbol}")
+                    
+                    # Log exit trade
+                    exit_price = signals['Close'].iloc[-1]  # Current price as proxy
+                    realized_pnl = self._calculate_pnl(position, exit_price)
+                    
+                    self.performance_tracker.log_trade({
+                        'symbol': position.symbol,
+                        'side': 'LONG' if position.side == PositionSide.LONG else 'SHORT',
+                        'action': 'EXIT',
+                        'quantity': abs(float(position.qty)),
+                        'price': exit_price,
+                        'strategy': self.strategy_name,
+                        'realized_pnl': realized_pnl,
+                        'commission': 0  # Alpaca paper trading has no commission
+                    })
+                    
+                    logger.info(f"Closed position in {position.symbol} at ${exit_price:.2f} | P&L: ${realized_pnl:.2f}")
                     
             except Exception as e:
                 logger.error(f"Error managing position in {position.symbol}: {str(e)}")
@@ -158,7 +179,7 @@ class AlpacaTrader:
                         
                         if shares > 0:
                             # Submit order
-                            self.trading_client.submit_order(
+                            order = self.trading_client.submit_order(
                                 MarketOrderRequest(
                                     symbol=symbol,
                                     qty=shares,
@@ -166,7 +187,34 @@ class AlpacaTrader:
                                     time_in_force=TimeInForce.DAY
                                 )
                             )
-                            logger.info(f"Opened {'long' if last_signal == 1 else 'short'} position in {symbol}")
+                            
+                            # Extract additional signal data for tracking
+                            entry_data = {
+                                'symbol': symbol,
+                                'side': 'LONG' if last_signal == 1 else 'SHORT',
+                                'action': 'ENTRY',
+                                'quantity': shares,
+                                'price': current_price,
+                                'strategy': self.strategy_name,
+                                'commission': 0
+                            }
+                            
+                            # Add strategy-specific data if available
+                            if 'Entry_Price' in signals.columns:
+                                entry_data['entry_price'] = signals['Entry_Price'].iloc[-1]
+                            if 'Stop_Loss' in signals.columns:
+                                entry_data['stop_loss'] = signals['Stop_Loss'].iloc[-1]
+                            if 'Profit_Target' in signals.columns:
+                                entry_data['profit_target'] = signals['Profit_Target'].iloc[-1]
+                            if 'Position_Size' in signals.columns:
+                                entry_data['position_size'] = signals['Position_Size'].iloc[-1]
+                            if 'Trade_Quality' in signals.columns:
+                                entry_data['trade_quality'] = signals['Trade_Quality'].iloc[-1]
+                            
+                            self.performance_tracker.log_trade(entry_data)
+                            
+                            logger.info(f"Opened {'long' if last_signal == 1 else 'short'} position in {symbol} "
+                                      f"| {shares} shares @ ${current_price:.2f}")
                             available_positions -= 1
                             
                             if available_positions <= 0:
@@ -185,14 +233,15 @@ class AlpacaTrader:
                 if self.check_market_hours():
                     logger.info("Market is open, running strategy...")
                     
-                    # Manage existing positions
                     self.manage_existing_positions()
-                    
-                    # Look for new entries
                     self.scan_for_entries()
-                    
-                    # Display current portfolio status
+                    self.log_portfolio_snapshot()
                     self.display_portfolio_status()
+                    
+                    # Log strategy performance every hour
+                    if datetime.now().minute == 0:
+                        self.performance_tracker.log_strategy_performance(self.strategy_name)
+
                 else:
                     logger.info("Market is closed.")
                 
@@ -297,20 +346,75 @@ class AlpacaTrader:
             account = self.trading_client.get_account()
             positions = self.trading_client.get_all_positions()
             
-            logger.info("\n=== Portfolio Status ===")
-            logger.info(f"Equity: ${float(account.equity):,.2f}")
-            logger.info(f"Buying Power: ${float(account.buying_power):,.2f}")
-            logger.info(f"Number of Positions: {len(positions)}")
-            
             for position in positions:
                 logger.info(f"\n{position.symbol}:")
                 logger.info(f"Side: {position.side}")
                 logger.info(f"Quantity: {position.qty}")
                 logger.info(f"Market Value: ${float(position.market_value):,.2f}")
                 logger.info(f"Unrealized P/L: ${float(position.unrealized_pl):,.2f}")
+
+            logger.info("\n=== Portfolio Status ===")
+            logger.info(f"Equity: ${float(account.equity):,.2f}")
+            logger.info(f"Buying Power: ${float(account.buying_power):,.2f}")
+            logger.info(f"Total Account Value: {float(account.equity) + float(account.buying_power):,.2f}")
+            logger.info(f"Number of Positions: {len(positions)}")
                 
         except Exception as e:
             logger.error(f"Error displaying portfolio status: {str(e)}")
+    
+    def _calculate_pnl(self, position, exit_price: float) -> float:
+        """Calculate realized P&L for a position"""
+        try:
+            entry_price = float(position.avg_entry_price)
+            quantity = abs(float(position.qty))
+            
+            if position.side == PositionSide.LONG:
+                return (exit_price - entry_price) * quantity
+            else:
+                return (entry_price - exit_price) * quantity
+        except Exception:
+            return 0.0
+    
+    def log_portfolio_snapshot(self):
+        """Log current portfolio state for performance tracking"""
+        try:
+            account = self.trading_client.get_account()
+            positions = self.trading_client.get_all_positions()
+            
+            # Calculate portfolio metrics
+            total_equity = float(account.equity)
+            buying_power = float(account.buying_power)
+            total_positions = len(positions)
+            
+            # Calculate daily P&L
+            daily_pnl = float(account.equity) - float(account.last_equity) if hasattr(account, 'last_equity') else 0
+            
+            # Calculate unrealized P&L
+            unrealized_pnl = sum(float(p.unrealized_pl) for p in positions)
+            
+            portfolio_data = {
+                'total_equity': total_equity,
+                'buying_power': buying_power,
+                'total_positions': total_positions,
+                'daily_pnl': daily_pnl,
+                'total_pnl': unrealized_pnl
+            }
+            
+            self.performance_tracker.log_portfolio_snapshot(portfolio_data)
+            
+        except Exception as e:
+            logger.error(f"Error logging portfolio snapshot: {str(e)}")
+    
+    def generate_performance_report(self):
+        """Generate and display performance report"""
+        try:
+            report = self.performance_tracker.generate_daily_report()
+            logger.info("Daily Performance Report:")
+            logger.info(report)
+            return report
+        except Exception as e:
+            logger.error(f"Error generating performance report: {str(e)}")
+            return None
 
 # Example usage
 if __name__ == "__main__":
@@ -320,27 +424,20 @@ if __name__ == "__main__":
         return key, secret
     
     # Initialize strategy with optimized parameters
-    strategy = TrendFollowDev(
-        volatility_window=15,
-        volume_window=15,
-        high_vol_threshold=0.28,
-        low_vol_threshold=0.17,
-        market_cap='mid',
-        high_vol_fast_ema=6,
-        high_vol_slow_ema=20,
-        high_vol_volume_threshold=1.8,
-        high_vol_profit_target=0.23,
-        high_vol_stop_loss=0.07,
-        med_vol_fast_ema=9,
-        med_vol_slow_ema=28,
-        med_vol_volume_threshold=1.4,
-        med_vol_profit_target=0.13,
-        med_vol_stop_loss=0.04,
-        low_vol_fast_ema=11,
-        low_vol_slow_ema=35,
-        low_vol_volume_threshold=1.1,
-        low_vol_profit_target=0.11,
-        low_vol_stop_loss=0.02
+    strategy = RobustTrend3(
+        fast_ema=12,
+        slow_ema=26,
+        atr_period=14,
+        volume_period=20,
+        volume_threshold=1.5,
+        atr_stop_multiplier=2.0,
+        atr_target_multiplier=3.0,
+        min_trend_strength=0.02,
+        max_position_risk=0.02,
+        base_position_size=0.1,
+        volatility_lookback=20,
+        min_hold_period=3,
+        transaction_cost=0.001
     )
     
     # Load API keys

@@ -4,16 +4,14 @@ import numpy as np
 from typing import Dict, List
 from concurrent.futures import ThreadPoolExecutor
 from data import Data
-from strategies import TrendFollow, TrendFollow2, TrendFollow3, TrendFollowDev
+from strategies import RobustTrend, RobustTrend3
 
 class MultiStrategyTester:
     def __init__(self):
         self.data_retriever = Data()
         self.strategies = {
-            'Developmental Strategy': TrendFollowDev(),
-            'TrendFollow': TrendFollow(),
-            'TrendFollow 2.0': TrendFollow2(),
-            'TrendFollow 3.0': TrendFollow3()
+            'RobustTrend': RobustTrend(),
+            'RobustTrend 3.0': RobustTrend3()
         }
         
         self.test_periods = {

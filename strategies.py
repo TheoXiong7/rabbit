@@ -742,3 +742,514 @@ class TrendFollowDev(BaseStrategy):
                 df.loc[df.index[i], 'Entry_Price'] = current_price
         
         return df
+# Robust Trend Strategy - Simplified and reliable
+class RobustTrend(BaseStrategy):
+    def __init__(
+        self,
+        fast_ema: int = 12,
+        slow_ema: int = 26,
+        atr_period: int = 14,
+        volume_period: int = 20,
+        volume_threshold: float = 1.5,
+        atr_stop_multiplier: float = 2.0,
+        atr_target_multiplier: float = 3.0,
+        min_trend_strength: float = 0.02,
+        max_position_risk: float = 0.02
+    ):
+        super().__init__()
+        self.fast_ema = fast_ema
+        self.slow_ema = slow_ema
+        self.atr_period = atr_period
+        self.volume_period = volume_period
+        self.volume_threshold = volume_threshold
+        self.atr_stop_multiplier = atr_stop_multiplier
+        self.atr_target_multiplier = atr_target_multiplier
+        self.min_trend_strength = min_trend_strength
+        self.max_position_risk = max_position_risk
+
+    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        
+        # Core trend indicators - simple and reliable
+        df['EMA_fast'] = df['Close'].ewm(span=self.fast_ema, adjust=False).mean()
+        df['EMA_slow'] = df['Close'].ewm(span=self.slow_ema, adjust=False).mean()
+        df['EMA_diff'] = (df['EMA_fast'] - df['EMA_slow']) / df['EMA_slow']
+        
+        # ATR for dynamic position sizing and stops
+        df['High_Low'] = df['High'] - df['Low']
+        df['High_Close'] = np.abs(df['High'] - df['Close'].shift(1))
+        df['Low_Close'] = np.abs(df['Low'] - df['Close'].shift(1))
+        df['True_Range'] = df[['High_Low', 'High_Close', 'Low_Close']].max(axis=1)
+        df['ATR'] = df['True_Range'].rolling(window=self.atr_period).mean()
+        
+        # Volume confirmation - simple average
+        df['Volume_MA'] = df['Volume'].rolling(window=self.volume_period).mean()
+        df['Volume_Ratio'] = df['Volume'] / df['Volume_MA']
+        
+        # Trend momentum - price above/below recent highs/lows
+        df['Recent_High'] = df['High'].rolling(window=5).max().shift(1)
+        df['Recent_Low'] = df['Low'].rolling(window=5).min().shift(1)
+        
+        # Trend strength filter
+        df['Trend_Strength'] = abs(df['EMA_diff'])
+        
+        return df
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = self.calculate_indicators(df)
+        df['Signal'] = 0
+        df['Entry_Price'] = 0.0
+        df['Stop_Loss'] = 0.0
+        df['Profit_Target'] = 0.0
+        
+        last_signal = 0
+        entry_price = 0.0
+        stop_loss = 0.0
+        profit_target = 0.0
+        
+        for i in range(1, len(df)):
+            current_price = df['Close'].iloc[i]
+            atr = df['ATR'].iloc[i]
+            
+            # Skip if ATR is NaN or zero
+            if pd.isna(atr) or atr == 0:
+                continue
+            
+            # Position management - check exits first
+            if last_signal != 0:
+                # Check stop loss and profit target
+                if last_signal == 1:  # Long position
+                    if current_price <= stop_loss or current_price >= profit_target:
+                        df.loc[df.index[i], 'Signal'] = -1  # Exit long
+                        last_signal = 0
+                        continue
+                elif last_signal == -1:  # Short position
+                    if current_price >= stop_loss or current_price <= profit_target:
+                        df.loc[df.index[i], 'Signal'] = 1  # Exit short
+                        last_signal = 0
+                        continue
+            
+            # Entry conditions - only when not in position
+            if last_signal == 0:
+                # Basic trend conditions
+                trend_up = (df['EMA_fast'].iloc[i] > df['EMA_slow'].iloc[i] and 
+                           df['EMA_fast'].iloc[i] > df['EMA_fast'].iloc[i-1])
+                
+                trend_down = (df['EMA_fast'].iloc[i] < df['EMA_slow'].iloc[i] and 
+                             df['EMA_fast'].iloc[i] < df['EMA_fast'].iloc[i-1])
+                
+                # Trend strength filter
+                strong_trend = df['Trend_Strength'].iloc[i] > self.min_trend_strength
+                
+                # Volume confirmation
+                volume_confirmed = df['Volume_Ratio'].iloc[i] > self.volume_threshold
+                
+                # Breakout confirmation
+                breakout_up = current_price > df['Recent_High'].iloc[i]
+                breakout_down = current_price < df['Recent_Low'].iloc[i]
+                
+                # Generate entry signals
+                if trend_up and strong_trend and volume_confirmed and breakout_up:
+                    df.loc[df.index[i], 'Signal'] = 1
+                    last_signal = 1
+                    entry_price = current_price
+                    stop_loss = entry_price - (atr * self.atr_stop_multiplier)
+                    profit_target = entry_price + (atr * self.atr_target_multiplier)
+                    
+                elif trend_down and strong_trend and volume_confirmed and breakout_down:
+                    df.loc[df.index[i], 'Signal'] = -1
+                    last_signal = -1
+                    entry_price = current_price
+                    stop_loss = entry_price + (atr * self.atr_stop_multiplier)
+                    profit_target = entry_price - (atr * self.atr_target_multiplier)
+            
+            # Record entry details
+            if df['Signal'].iloc[i] != 0:
+                df.loc[df.index[i], 'Entry_Price'] = entry_price
+                df.loc[df.index[i], 'Stop_Loss'] = stop_loss
+                df.loc[df.index[i], 'Profit_Target'] = profit_target
+        
+        return df
+
+# Robust Trend 2.0 - Enhanced with momentum filters and risk management
+class RobustTrend2(BaseStrategy):
+    def __init__(
+        self,
+        fast_ema: int = 12,
+        slow_ema: int = 26,
+        trend_ema: int = 50,  # Long-term trend filter
+        atr_period: int = 14,
+        volume_period: int = 20,
+        volume_threshold: float = 1.3,  # Slightly more lenient
+        atr_stop_multiplier: float = 2.5,  # Wider stops
+        atr_target_multiplier: float = 4.0,  # Better R:R ratio
+        min_trend_strength: float = 0.015,  # Slightly more lenient
+        momentum_period: int = 10,  # Price momentum lookback
+        min_momentum: float = 0.02,  # Minimum momentum filter
+        max_position_risk: float = 0.02,
+        trend_alignment_required: bool = True  # Require alignment with long-term trend
+    ):
+        super().__init__()
+        self.fast_ema = fast_ema
+        self.slow_ema = slow_ema
+        self.trend_ema = trend_ema
+        self.atr_period = atr_period
+        self.volume_period = volume_period
+        self.volume_threshold = volume_threshold
+        self.atr_stop_multiplier = atr_stop_multiplier
+        self.atr_target_multiplier = atr_target_multiplier
+        self.min_trend_strength = min_trend_strength
+        self.momentum_period = momentum_period
+        self.min_momentum = min_momentum
+        self.max_position_risk = max_position_risk
+        self.trend_alignment_required = trend_alignment_required
+
+    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        
+        # Core trend indicators
+        df['EMA_fast'] = df['Close'].ewm(span=self.fast_ema, adjust=False).mean()
+        df['EMA_slow'] = df['Close'].ewm(span=self.slow_ema, adjust=False).mean()
+        df['EMA_trend'] = df['Close'].ewm(span=self.trend_ema, adjust=False).mean()
+        df['EMA_diff'] = (df['EMA_fast'] - df['EMA_slow']) / df['EMA_slow']
+        
+        # ATR for dynamic position sizing and stops
+        df['High_Low'] = df['High'] - df['Low']
+        df['High_Close'] = np.abs(df['High'] - df['Close'].shift(1))
+        df['Low_Close'] = np.abs(df['Low'] - df['Close'].shift(1))
+        df['True_Range'] = df[['High_Low', 'High_Close', 'Low_Close']].max(axis=1)
+        df['ATR'] = df['True_Range'].rolling(window=self.atr_period).mean()
+        
+        # Volume confirmation with smoothing
+        df['Volume_MA'] = df['Volume'].rolling(window=self.volume_period).mean()
+        df['Volume_Ratio'] = df['Volume'] / df['Volume_MA']
+        df['Volume_Smooth'] = df['Volume_Ratio'].rolling(window=3).mean()  # Smooth volume spikes
+        
+        # Enhanced momentum indicators
+        df['Price_Momentum'] = (df['Close'] - df['Close'].shift(self.momentum_period)) / df['Close'].shift(self.momentum_period)
+        df['EMA_Momentum'] = (df['EMA_fast'] - df['EMA_fast'].shift(3)) / df['EMA_fast'].shift(3)
+        
+        # Trend strength and direction
+        df['Trend_Strength'] = abs(df['EMA_diff'])
+        df['Long_Trend_Bull'] = df['Close'] > df['EMA_trend']
+        df['Long_Trend_Bear'] = df['Close'] < df['EMA_trend']
+        
+        # Support/Resistance levels
+        df['Recent_High'] = df['High'].rolling(window=8).max().shift(1)  # Longer lookback
+        df['Recent_Low'] = df['Low'].rolling(window=8).min().shift(1)
+        
+        # Volatility normalization
+        df['Price_Range'] = (df['High'] - df['Low']) / df['Close']
+        df['Volatility_Rank'] = df['Price_Range'].rolling(window=20).rank(pct=True)
+        
+        return df
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = self.calculate_indicators(df)
+        df['Signal'] = 0
+        df['Entry_Price'] = 0.0
+        df['Stop_Loss'] = 0.0
+        df['Profit_Target'] = 0.0
+        df['Trade_Reason'] = ''
+        
+        last_signal = 0
+        entry_price = 0.0
+        stop_loss = 0.0
+        profit_target = 0.0
+        
+        for i in range(1, len(df)):
+            current_price = df['Close'].iloc[i]
+            atr = df['ATR'].iloc[i]
+            
+            # Skip if insufficient data
+            if pd.isna(atr) or atr == 0 or i < self.trend_ema:
+                continue
+            
+            # Position management - check exits first
+            if last_signal != 0:
+                # Dynamic stop adjustment based on volatility
+                volatility_adj = 1.0
+                if df['Volatility_Rank'].iloc[i] > 0.8:  # High volatility
+                    volatility_adj = 1.2
+                elif df['Volatility_Rank'].iloc[i] < 0.2:  # Low volatility
+                    volatility_adj = 0.8
+                
+                adjusted_stop = stop_loss * volatility_adj if last_signal == 1 else stop_loss / volatility_adj
+                
+                # Check exits with dynamic stops
+                if last_signal == 1:  # Long position
+                    if current_price <= adjusted_stop or current_price >= profit_target:
+                        df.loc[df.index[i], 'Signal'] = -1
+                        df.loc[df.index[i], 'Trade_Reason'] = 'Exit Long'
+                        last_signal = 0
+                        continue
+                elif last_signal == -1:  # Short position
+                    if current_price >= adjusted_stop or current_price <= profit_target:
+                        df.loc[df.index[i], 'Signal'] = 1
+                        df.loc[df.index[i], 'Trade_Reason'] = 'Exit Short'
+                        last_signal = 0
+                        continue
+            
+            # Entry conditions - only when not in position
+            if last_signal == 0:
+                # Basic trend conditions
+                trend_up = (df['EMA_fast'].iloc[i] > df['EMA_slow'].iloc[i] and 
+                           df['EMA_fast'].iloc[i] > df['EMA_fast'].iloc[i-1])
+                
+                trend_down = (df['EMA_fast'].iloc[i] < df['EMA_slow'].iloc[i] and 
+                             df['EMA_fast'].iloc[i] < df['EMA_fast'].iloc[i-1])
+                
+                # Long-term trend alignment
+                if self.trend_alignment_required:
+                    trend_aligned_up = df['Long_Trend_Bull'].iloc[i]
+                    trend_aligned_down = df['Long_Trend_Bear'].iloc[i]
+                else:
+                    trend_aligned_up = trend_aligned_down = True
+                
+                # Enhanced filters
+                strong_trend = df['Trend_Strength'].iloc[i] > self.min_trend_strength
+                volume_confirmed = df['Volume_Smooth'].iloc[i] > self.volume_threshold
+                momentum_confirmed = abs(df['Price_Momentum'].iloc[i]) > self.min_momentum
+                ema_momentum_confirmed = abs(df['EMA_Momentum'].iloc[i]) > 0.005
+                
+                # Breakout confirmation with better levels
+                breakout_up = current_price > df['Recent_High'].iloc[i]
+                breakout_down = current_price < df['Recent_Low'].iloc[i]
+                
+                # Volatility filter - avoid extreme volatility
+                volatility_ok = 0.2 <= df['Volatility_Rank'].iloc[i] <= 0.8
+                
+                # Generate entry signals with comprehensive filters
+                long_conditions = (trend_up and trend_aligned_up and strong_trend and 
+                                 volume_confirmed and momentum_confirmed and 
+                                 ema_momentum_confirmed and breakout_up and volatility_ok)
+                
+                short_conditions = (trend_down and trend_aligned_down and strong_trend and 
+                                  volume_confirmed and momentum_confirmed and 
+                                  ema_momentum_confirmed and breakout_down and volatility_ok)
+                
+                if long_conditions:
+                    df.loc[df.index[i], 'Signal'] = 1
+                    df.loc[df.index[i], 'Trade_Reason'] = 'Long Entry'
+                    last_signal = 1
+                    entry_price = current_price
+                    stop_loss = entry_price - (atr * self.atr_stop_multiplier)
+                    profit_target = entry_price + (atr * self.atr_target_multiplier)
+                    
+                elif short_conditions:
+                    df.loc[df.index[i], 'Signal'] = -1
+                    df.loc[df.index[i], 'Trade_Reason'] = 'Short Entry'
+                    last_signal = -1
+                    entry_price = current_price
+                    stop_loss = entry_price + (atr * self.atr_stop_multiplier)
+                    profit_target = entry_price - (atr * self.atr_target_multiplier)
+            
+            # Record entry details
+            if df['Signal'].iloc[i] != 0:
+                df.loc[df.index[i], 'Entry_Price'] = entry_price
+                df.loc[df.index[i], 'Stop_Loss'] = stop_loss
+                df.loc[df.index[i], 'Profit_Target'] = profit_target
+        
+        return df
+
+# Robust Trend 3.0 - Optimized for real trading with smart position sizing
+class RobustTrend3(BaseStrategy):
+    def __init__(
+        self,
+        fast_ema: int = 12,
+        slow_ema: int = 26,
+        atr_period: int = 14,
+        volume_period: int = 20,
+        volume_threshold: float = 1.5,
+        atr_stop_multiplier: float = 2.0,
+        atr_target_multiplier: float = 3.0,
+        min_trend_strength: float = 0.02,
+        max_position_risk: float = 0.02,  # Max 2% risk per trade
+        base_position_size: float = 0.1,  # Base 10% of portfolio
+        volatility_lookback: int = 20,
+        min_hold_period: int = 3,  # Minimum days to hold position
+        transaction_cost: float = 0.001,  # 0.1% transaction cost
+    ):
+        super().__init__()
+        self.fast_ema = fast_ema
+        self.slow_ema = slow_ema
+        self.atr_period = atr_period
+        self.volume_period = volume_period
+        self.volume_threshold = volume_threshold
+        self.atr_stop_multiplier = atr_stop_multiplier
+        self.atr_target_multiplier = atr_target_multiplier
+        self.min_trend_strength = min_trend_strength
+        self.max_position_risk = max_position_risk
+        self.base_position_size = base_position_size
+        self.volatility_lookback = volatility_lookback
+        self.min_hold_period = min_hold_period
+        self.transaction_cost = transaction_cost
+
+    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        
+        # Core trend indicators (keep it simple)
+        df['EMA_fast'] = df['Close'].ewm(span=self.fast_ema, adjust=False).mean()
+        df['EMA_slow'] = df['Close'].ewm(span=self.slow_ema, adjust=False).mean()
+        df['EMA_diff'] = (df['EMA_fast'] - df['EMA_slow']) / df['EMA_slow']
+        
+        # ATR for position sizing
+        df['High_Low'] = df['High'] - df['Low']
+        df['High_Close'] = np.abs(df['High'] - df['Close'].shift(1))
+        df['Low_Close'] = np.abs(df['Low'] - df['Close'].shift(1))
+        df['True_Range'] = df[['High_Low', 'High_Close', 'Low_Close']].max(axis=1)
+        df['ATR'] = df['True_Range'].rolling(window=self.atr_period).mean()
+        
+        # Volatility for position sizing
+        df['Volatility'] = df['Returns'].rolling(window=self.volatility_lookback).std() * np.sqrt(252)
+        
+        # Volume confirmation
+        df['Volume_MA'] = df['Volume'].rolling(window=self.volume_period).mean()
+        df['Volume_Ratio'] = df['Volume'] / df['Volume_MA']
+        
+        # Support/Resistance levels
+        df['Recent_High'] = df['High'].rolling(window=5).max().shift(1)
+        df['Recent_Low'] = df['Low'].rolling(window=5).min().shift(1)
+        
+        # Trend strength
+        df['Trend_Strength'] = abs(df['EMA_diff'])
+        
+        # Position sizing calculation
+        df['Risk_Adjusted_Size'] = self._calculate_position_size(df)
+        
+        return df
+    
+    def _calculate_position_size(self, df: pd.DataFrame) -> pd.Series:
+        """Calculate volatility-adjusted position size"""
+        # Base position size adjusted for volatility
+        median_vol = df['Volatility'].rolling(window=60).median()
+        current_vol = df['Volatility']
+        
+        # Inverse volatility scaling
+        current_vol_safe = current_vol.fillna(median_vol)
+        current_vol_safe = current_vol_safe.mask(current_vol_safe == 0, median_vol)
+        vol_adjustment = median_vol / current_vol_safe
+        vol_adjustment = np.clip(vol_adjustment, 0.5, 2.0)  # Cap between 50% and 200%
+        
+        # Risk-based sizing using ATR
+        atr_pct = df['ATR'] / df['Close']
+        risk_adjustment = self.max_position_risk / (atr_pct * self.atr_stop_multiplier)
+        risk_adjustment = np.clip(risk_adjustment, 0.2, 3.0)  # Cap between 20% and 300%
+        
+        # Combined position size
+        position_size = self.base_position_size * vol_adjustment * risk_adjustment
+        position_size = np.clip(position_size, 0.02, 0.25)  # Between 2% and 25% of portfolio
+        
+        return position_size
+
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = self.calculate_indicators(df)
+        df['Signal'] = 0
+        df['Entry_Price'] = 0.0
+        df['Stop_Loss'] = 0.0
+        df['Profit_Target'] = 0.0
+        df['Position_Size'] = 0.0
+        df['Hold_Days'] = 0
+        df['Trade_Quality'] = 0.0
+        
+        last_signal = 0
+        entry_price = 0.0
+        stop_loss = 0.0
+        profit_target = 0.0
+        position_size = 0.0
+        entry_day = 0
+        
+        for i in range(1, len(df)):
+            current_price = df['Close'].iloc[i]
+            atr = df['ATR'].iloc[i]
+            
+            # Skip if insufficient data
+            if pd.isna(atr) or atr == 0:
+                continue
+            
+            # Update hold days
+            if last_signal != 0:
+                df.loc[df.index[i], 'Hold_Days'] = i - entry_day
+            
+            # Position management - check exits first
+            if last_signal != 0:
+                hold_days = i - entry_day
+                
+                # Apply transaction costs to exit conditions
+                exit_threshold_long = stop_loss * (1 + self.transaction_cost)
+                exit_threshold_short = stop_loss * (1 - self.transaction_cost)
+                target_threshold_long = profit_target * (1 - self.transaction_cost)
+                target_threshold_short = profit_target * (1 + self.transaction_cost)
+                
+                # Check exits with minimum hold period
+                if hold_days >= self.min_hold_period:
+                    if last_signal == 1:  # Long position
+                        if current_price <= exit_threshold_long or current_price >= target_threshold_long:
+                            df.loc[df.index[i], 'Signal'] = -1
+                            last_signal = 0
+                            continue
+                    elif last_signal == -1:  # Short position
+                        if current_price >= exit_threshold_short or current_price <= target_threshold_short:
+                            df.loc[df.index[i], 'Signal'] = 1
+                            last_signal = 0
+                            continue
+            
+            # Entry conditions - only when not in position
+            if last_signal == 0:
+                # Core trend conditions (keep simple)
+                trend_up = (df['EMA_fast'].iloc[i] > df['EMA_slow'].iloc[i] and 
+                           df['EMA_fast'].iloc[i] > df['EMA_fast'].iloc[i-1])
+                
+                trend_down = (df['EMA_fast'].iloc[i] < df['EMA_slow'].iloc[i] and 
+                             df['EMA_fast'].iloc[i] < df['EMA_fast'].iloc[i-1])
+                
+                # Quality filters
+                strong_trend = df['Trend_Strength'].iloc[i] > self.min_trend_strength
+                volume_confirmed = df['Volume_Ratio'].iloc[i] > self.volume_threshold
+                breakout_up = current_price > df['Recent_High'].iloc[i]
+                breakout_down = current_price < df['Recent_Low'].iloc[i]
+                
+                # Calculate trade quality score (0-1)
+                trend_quality = min(df['Trend_Strength'].iloc[i] / 0.05, 1.0)
+                volume_quality = min(df['Volume_Ratio'].iloc[i] / 3.0, 1.0)
+                volatility_quality = 1.0 - min(df['Volatility'].iloc[i] / 0.5, 1.0)
+                
+                trade_quality = (trend_quality + volume_quality + volatility_quality) / 3.0
+                
+                # Only take high-quality trades (score > 0.6)
+                quality_threshold = 0.6
+                
+                # Generate entry signals
+                if (trend_up and strong_trend and volume_confirmed and 
+                    breakout_up and trade_quality > quality_threshold):
+                    
+                    df.loc[df.index[i], 'Signal'] = 1
+                    last_signal = 1
+                    entry_price = current_price
+                    entry_day = i
+                    stop_loss = entry_price - (atr * self.atr_stop_multiplier)
+                    profit_target = entry_price + (atr * self.atr_target_multiplier)
+                    position_size = df['Risk_Adjusted_Size'].iloc[i]
+                    
+                elif (trend_down and strong_trend and volume_confirmed and 
+                      breakout_down and trade_quality > quality_threshold):
+                    
+                    df.loc[df.index[i], 'Signal'] = -1
+                    last_signal = -1
+                    entry_price = current_price
+                    entry_day = i
+                    stop_loss = entry_price + (atr * self.atr_stop_multiplier)
+                    profit_target = entry_price - (atr * self.atr_target_multiplier)
+                    position_size = df['Risk_Adjusted_Size'].iloc[i]
+                
+                # Record trade quality for analysis
+                df.loc[df.index[i], 'Trade_Quality'] = trade_quality
+            
+            # Record entry/position details
+            if df['Signal'].iloc[i] != 0:
+                df.loc[df.index[i], 'Entry_Price'] = entry_price
+                df.loc[df.index[i], 'Stop_Loss'] = stop_loss
+                df.loc[df.index[i], 'Profit_Target'] = profit_target
+                df.loc[df.index[i], 'Position_Size'] = position_size
+        
+        return df

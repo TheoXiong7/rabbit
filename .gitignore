@@ -43,3 +43,5 @@ ENV/
 # API keys & misc
 key.txt
 notes.txt
+/logs
+trading_performance.db
