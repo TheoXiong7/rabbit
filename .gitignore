@@ -42,6 +42,15 @@ ENV/
 
 # API keys & misc
 key.txt
-notes.txt
 /logs
 trading_performance.db
+
+# Trading data and reports
+*.db
+summary_*.txt
+performance_*.log
+trades_*.log
+
+# Temporary files
+*.tmp
+*.temp

@@ -19,30 +19,16 @@ class MultiStrategyTester:
             '5Y': "5y"
         }
         
-        # Stock universe remains the same
+        # 30-40 bluechip stocks
         self.stock_universe = {
-            'Tech Large-Cap': ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'META', 'AVGO', 'CSCO', 'ORCL',
-                               'PLTR', 'INTC', 'CRM', 'ADBE', 'ACN', 'SMCI', 'MU', 'AMD', 'ON',
-                               'QCOM', 'UMC', 'MRVL', 'SNOW', 'AMAT', 'TSN'],
-            'Tech Mid-Cap': ['CRWD', 'NET', 'FTNT', 'PANW', 'DDOG', 'ZS', 'SNPS', 
-                             'CDNS', 'QUBT', 'RGTI', 'QS', 'IONQ', 'RIVN', 'LUNR', 'LCID', 'CFLT',
-                             'GTLB', 'TTD', 'SOUN', 'QBTS', 'AI', 'S', 'QRVO', 'GTLB'],
-            'Finance Large-Cap': ['JPM', 'BAC', 'GS', 'MS', 'BLK', 'SCHW', 'C', 'WFC', 'V', 'MA',
-                                  'AXP'],
-            'Finance Mid-Cap': ['COIN', 'HOOD', 'RJF', 'SEIC', 'LPLA', 'FDS', 'SOFI', 'AFRM'],
-            'Healthcare Large-Cap': ['JNJ', 'PFE', 'UNH', 'ABBV', 'LLY', 'TMO', 'DHR', 'BMY', 'MRNA',
-                                     'MDT', 'BAX'],
-            'Healthcare Mid-Cap': ['HOLX', 'VTRS', 'CRL', 'ICLR', 'WST', 'MTD', 'ENVX', 'TDOC',
-                                   'VEEV'],
-            'Consumer Staples': ['WMT', 'PG', 'KO', 'MCD', 'COST', 'PEP', 'TGT', 'DG'],
-            'Consumer Discretionary': ['AMZN', 'TSLA', 'NKE', 'SBUX', 'TJX', 'BKNG', 'MAR'],
-            'Industrial Large-Cap': ['CAT', 'DE', 'BA', 'HON', 'UNP', 'RTX', 'GE', 'MMM'],
-            'Industrial Mid-Cap': ['URI', 'PWR', 'FAST', 'GGG', 'RBC', 'EME', 'IRBT', 'BE'],
-            'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX'],
-            'Materials': ['LIN', 'APD', 'ECL', 'NEM', 'FCX', 'DOW', 'NUE'],
-            'Utilities': ['NEE', 'DUK', 'SO', 'D', 'SRE', 'AEP', 'XEL', 'PCG'],
-            'Real Estate': ['PLD', 'AMT', 'EQIX', 'PSA', 'O', 'WELL', 'AVB'],
-            'Communication': ['VZ', 'T', 'CMCSA', 'NFLX', 'DIS', 'TMUS', 'CHTR']
+            'Tech': ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'META', 'AVGO',
+            'ORCL', 'CRM', 'ADBE'],
+            'Finance': ['JPM', 'BAC', 'GS', 'MS', 'V', 'MA', 'AXP'],
+            'Healthcare': ['UNH', 'JNJ', 'ABBV', 'LLY', 'TMO', 'DHR'],
+            'Consumer': ['AMZN', 'TSLA', 'WMT', 'COST', 'MCD', 'NKE'],
+            'Industrial': ['CAT', 'DE', 'BA', 'HON', 'UNP', 'RTX'],
+            'Energy': ['XOM', 'CVX', 'COP'],
+            'Communication': ['NFLX', 'DIS', 'CMCSA']
         }
 
     def calculate_trade_metrics(self, signals_df: pd.DataFrame) -> Dict:
