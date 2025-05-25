@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import time
 import logging
 from typing import Dict, List
-from strategies import RobustTrend3
+from strategies import RobustTrend
 from performance_tracker import PerformanceTracker
 
 logging.basicConfig(level=logging.INFO)
@@ -423,21 +423,15 @@ if __name__ == "__main__":
             key, secret = f.read().strip().split('\n')
         return key, secret
     
-    # Initialize strategy with optimized parameters
-    strategy = RobustTrend3(
-        fast_ema=12,
-        slow_ema=26,
+    # Initialize strategy with proven parameters
+    strategy = RobustTrend(
+        fast_ema=10,
+        slow_ema=30,
         atr_period=14,
         volume_period=20,
         volume_threshold=1.5,
         atr_stop_multiplier=2.0,
-        atr_target_multiplier=3.0,
-        min_trend_strength=0.02,
-        max_position_risk=0.02,
-        base_position_size=0.1,
-        volatility_lookback=20,
-        min_hold_period=3,
-        transaction_cost=0.001
+        atr_target_multiplier=3.0
     )
     
     # Load API keys
@@ -445,5 +439,13 @@ if __name__ == "__main__":
     
     # Initialize and run trader
     trader = AlpacaTrader(strategy, api_key, api_secret, paper=True)
-    #trader.display_metrics()
-    trader.run()
+    
+    # Run trading loop
+    try:
+        print("Starting paper trading with RobustTrend strategy...")
+        trader.run_trading_loop()
+    except KeyboardInterrupt:
+        print("\nTrading stopped by user")
+    except Exception as e:
+        print(f"Trading error: {e}")
+        logger.error(f"Trading error: {e}")
