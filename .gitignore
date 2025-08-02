@@ -43,6 +43,7 @@ ENV/
 # API keys & misc
 key.txt
 /logs
+/optreps
 trading_performance.db
 
 # Trading data and reports

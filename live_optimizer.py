@@ -70,11 +70,17 @@ class LiveOptimizer:
         if df.empty:
             return {}
         
-        df['quality_bucket'] = pd.cut(df['trade_quality'], 
+        # Filter out rows with None trade_quality
+        quality_df = df[df['trade_quality'].notna()].copy()
+        
+        if quality_df.empty:
+            return {"error": "No trades with quality scores found"}
+        
+        quality_df['quality_bucket'] = pd.cut(quality_df['trade_quality'], 
                                     bins=[0, 0.6, 0.7, 0.8, 1.0], 
                                     labels=['Low', 'Medium', 'High', 'Very High'])
         
-        return df.groupby('quality_bucket').agg({
+        return quality_df.groupby('quality_bucket', observed=False).agg({
             'realized_pnl': ['count', 'mean', lambda x: (x > 0).mean()]
         }).to_dict()
     
@@ -165,8 +171,12 @@ def optimize_from_paper_trading():
     report = optimizer.generate_optimization_report()
     print(report)
     
+    # Create directory if it doesn't exist
+    import os
+    os.makedirs('optreps', exist_ok=True)
+    
     # Save report
-    with open(f'optimization_report_{datetime.now().strftime("%Y%m%d")}.txt', 'w') as f:
+    with open(f'optreps/optimization_report_{datetime.now().strftime("%Y%m%d")}.txt', 'w') as f:
         f.write(report)
 
 if __name__ == "__main__":

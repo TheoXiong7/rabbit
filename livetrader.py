@@ -14,6 +14,10 @@ import logging
 from typing import Dict, List
 from strategies import RobustTrend
 from performance_tracker import PerformanceTracker
+from colorama import Fore, Back, Style, init
+
+# Initialize colorama for cross-platform colored terminal output
+init(autoreset=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('AlpacaTrader')
@@ -28,12 +32,11 @@ class AlpacaTrader:
         
         # 30-40 bluechip stocks
         self.stock_universe = {
-            'Tech': ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'META', 'AVGO',
-            'ORCL', 'CRM', 'ADBE'],
+            'Tech': ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'META', 'AVGO', 'ORCL', 'CRM', 'ADBE'],
             'Finance': ['JPM', 'BAC', 'GS', 'MS', 'V', 'MA', 'AXP'],
             'Healthcare': ['UNH', 'JNJ', 'ABBV', 'LLY', 'TMO', 'DHR'],
             'Consumer': ['AMZN', 'TSLA', 'WMT', 'COST', 'MCD', 'NKE'],
-            'Industrial': ['CAT', 'DE', 'BA', 'HON', 'UNP', 'RTX'],
+            'Industrial': ['CAT', 'DE', 'BA', 'HON', 'UNP', 'RTX', 'ENVX', 'LUNR'],
             'Energy': ['XOM', 'CVX', 'COP'],
             'Communication': ['NFLX', 'DIS', 'CMCSA']
         }
@@ -127,7 +130,9 @@ class AlpacaTrader:
                         'commission': 0  # Alpaca paper trading has no commission
                     })
                     
-                    logger.info(f"Closed position in {position.symbol} at ${exit_price:.2f} | P&L: ${realized_pnl:.2f}")
+                    pnl_color = Fore.GREEN if realized_pnl >= 0 else Fore.RED
+                    pnl_symbol = "📈" if realized_pnl >= 0 else "📉"
+                    print(f"{Fore.YELLOW}🔚 CLOSED{Style.RESET_ALL} {position.symbol} @ ${exit_price:.2f} | {pnl_color}{pnl_symbol} P&L: ${realized_pnl:.2f}{Style.RESET_ALL}")
                     
             except Exception as e:
                 logger.error(f"Error managing position in {position.symbol}: {str(e)}")
@@ -199,8 +204,9 @@ class AlpacaTrader:
                             
                             self.performance_tracker.log_trade(entry_data)
                             
-                            logger.info(f"Opened {'long' if last_signal == 1 else 'short'} position in {symbol} "
-                                      f"| {shares} shares @ ${current_price:.2f}")
+                            position_type = "LONG" if last_signal == 1 else "SHORT"
+                            position_emoji = "🟢" if last_signal == 1 else "🔴"
+                            print(f"{Fore.CYAN}🚀 OPENED{Style.RESET_ALL} {position_emoji} {position_type} {symbol} | {shares} shares @ ${current_price:.2f}")
                             available_positions -= 1
                             
                             if available_positions <= 0:
@@ -211,25 +217,32 @@ class AlpacaTrader:
 
     def run(self, interval: int = 60):
         """Main trading loop"""
-        logger.info("Starting trading loop...")
+        print(f"{Fore.MAGENTA}{'='*60}{Style.RESET_ALL}")
+        print(f"{Fore.MAGENTA}🤖 LIVE TRADER STARTED{Style.RESET_ALL}")
+        print(f"{Fore.MAGENTA}Strategy: {self.strategy_name}{Style.RESET_ALL}")
+        print(f"{Fore.MAGENTA}{'='*60}{Style.RESET_ALL}\n")
         
         while True:
             try:
-                print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                print(f"\n{Fore.BLUE}⏰ {current_time}{Style.RESET_ALL}")
+                
                 if self.check_market_hours():
-                    logger.info("Market is open, running strategy...")
+                    print(f"{Fore.GREEN}🟢 Market OPEN - Running strategy...{Style.RESET_ALL}")
                     
                     self.manage_existing_positions()
                     self.scan_for_entries()
                     self.log_portfolio_snapshot()
+                    # self.display_metrics()
                     self.display_portfolio_status()
-                    
+                    # self.display_strategy_info()
+
                     # Log strategy performance every hour
                     if datetime.now().minute == 0:
                         self.performance_tracker.log_strategy_performance(self.strategy_name)
 
                 else:
-                    logger.info("Market is closed.")
+                    print(f"{Fore.RED}🔴 Market CLOSED - Waiting...{Style.RESET_ALL}")
                 
                 time.sleep(interval)  # Wait before next iteration
                 
@@ -238,90 +251,73 @@ class AlpacaTrader:
                 time.sleep(60)  # Wait before retry
 
     def display_metrics(self, days: int = 30):
-        """
-        Display trading metrics and signals for all stocks in universe
-        
-        Args:
-            days (int): Number of days to look back
-        """
+        """Display concise trading metrics and signals"""
         try:
-            logger.info("\n" + "="*80)
-            logger.info(f"TRADING METRICS SUMMARY - {days} Day Analysis")
-            logger.info("="*80)
+            print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+            print(f"{Fore.CYAN}📊 MARKET SIGNALS ({days}D){Style.RESET_ALL}")
+            print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
 
-            # Store metrics for all stocks
             all_metrics = []
+            active_signals = {'BUY': [], 'SELL': []}
             
             for sector, symbols in self.stock_universe.items():
-                logger.info(f"\n{sector} Sector Analysis:")
-                logger.info("-"*80)
-                
-                sector_metrics = []
                 for symbol in symbols:
-                    # Get historical data and signals
-                    data = self.get_historical_data(symbol, days)
-                    if data is None:
-                        continue
+                    try:
+                        data = self.get_historical_data(symbol, days)
+                        if data is None:
+                            continue
+                            
+                        signals = self.strategy.generate_signals(data)
+                        latest_signal = signals['Signal'].iloc[-1]
+                        current_price = signals['Close'].iloc[-1]
                         
-                    signals = self.strategy.generate_signals(data)
-                    
-                    # Calculate key metrics
-                    metrics = {
-                        'Symbol': symbol,
-                        'Current_Price': signals['Close'].iloc[-1],
-                        'Latest_Signal': signals['Signal'].iloc[-1],
-                        'Buy_Signals': len(signals[signals['Signal'] == 1]),
-                        'Sell_Signals': len(signals[signals['Signal'] == -1]),
-                        'Avg_Return': signals[signals['Signal'] != 0]['Returns'].mean() * 100,
-                        'Volatility': signals['Returns'].std() * np.sqrt(252) * 100,
-                        'Volume': signals['Volume'].mean(),
-                        'High': signals['High'].max(),
-                        'Low': signals['Low'].min()
-                    }
-                    sector_metrics.append(metrics)
-                    
-                    # Format signal display
-                    signal_text = {1: '🟢 BUY', -1: '🔴 SELL', 0: '⚪ HOLD'}[metrics['Latest_Signal']]
-                    
-                    # Display individual stock metrics
-                    logger.info(f"\n{symbol:<6} | Price: ${metrics['Current_Price']:,.2f} | Signal: {signal_text}")
-                    logger.info(f"       | Buy Signals: {metrics['Buy_Signals']} | Sell Signals: {metrics['Sell_Signals']}")
-                    logger.info(f"       | Avg Return: {metrics['Avg_Return']:,.2f}% | Volatility: {metrics['Volatility']:,.2f}%")
-                    
-                # Calculate and display sector summary
-                if sector_metrics:
-                    sector_df = pd.DataFrame(sector_metrics)
-                    logger.info(f"\n{sector} Summary:")
-                    logger.info(f"Total Buy Signals: {sector_df['Buy_Signals'].sum()}")
-                    logger.info(f"Total Sell Signals: {sector_df['Sell_Signals'].sum()}")
-                    logger.info(f"Average Sector Return: {sector_df['Avg_Return'].mean():,.2f}%")
-                    logger.info(f"Average Sector Volatility: {sector_df['Volatility'].mean():,.2f}%")
-                    
-                    # Store for overall summary
-                    all_metrics.extend(sector_metrics)
+                        # Only track stocks with active signals
+                        if latest_signal == 1:
+                            active_signals['BUY'].append((symbol, current_price, sector))
+                        elif latest_signal == -1:
+                            active_signals['SELL'].append((symbol, current_price, sector))
+                        
+                        # Store for summary stats
+                        signal_returns = signals[signals['Signal'] != 0]['Returns']
+                        avg_return = signal_returns.mean() * 100 if len(signal_returns) > 0 else 0.0
+                        volatility = signals['Returns'].std() * np.sqrt(252) * 100
+                        
+                        all_metrics.append({
+                            'Symbol': symbol, 'Sector': sector, 'Signal': latest_signal,
+                            'Price': current_price, 'Avg_Return': avg_return, 'Volatility': volatility
+                        })
+                        
+                    except Exception as e:
+                        logger.debug(f"Error processing {symbol}: {str(e)}")
+                        continue
             
-            # Overall market summary
+            # Display active signals concisely
+            if active_signals['BUY']:
+                print(f"\n{Fore.GREEN}🟢 BUY SIGNALS ({len(active_signals['BUY'])}){Style.RESET_ALL}")
+                for symbol, price, sector in active_signals['BUY'][:5]:  # Top 5
+                    print(f"{symbol:<6} ${price:>7.2f} ({sector})")
+                if len(active_signals['BUY']) > 5:
+                    print(f"   ... +{len(active_signals['BUY']) - 5} more")
+            
+            if active_signals['SELL']:
+                print(f"\n{Fore.RED}🔴 SELL SIGNALS ({len(active_signals['SELL'])}){Style.RESET_ALL}")
+                for symbol, price, sector in active_signals['SELL'][:5]:  # Top 5
+                    print(f"{symbol:<6} ${price:>7.2f} ({sector})")
+                if len(active_signals['SELL']) > 5:
+                    print(f"   ... +{len(active_signals['SELL']) - 5} more")
+            
+            # Quick market summary
             if all_metrics:
                 market_df = pd.DataFrame(all_metrics)
-                logger.info("\n" + "="*80)
-                logger.info("OVERALL MARKET SUMMARY")
-                logger.info("="*80)
-                logger.info(f"Total Stocks Analyzed: {len(market_df)}")
-                logger.info(f"Current Buy Signals: {len(market_df[market_df['Latest_Signal'] == 1])}")
-                logger.info(f"Current Sell Signals: {len(market_df[market_df['Latest_Signal'] == -1])}")
-                logger.info(f"Average Market Return: {market_df['Avg_Return'].mean():,.2f}%")
-                logger.info(f"Average Market Volatility: {market_df['Volatility'].mean():,.2f}%")
+                total_signals = len(active_signals['BUY']) + len(active_signals['SELL'])
+                avg_return = market_df['Avg_Return'].mean()
+                avg_vol = market_df['Volatility'].mean()
                 
-                # Display top opportunities
-                logger.info("\nTop 5 Buy Opportunities:")
-                buy_opps = market_df[market_df['Latest_Signal'] == 1].nlargest(5, 'Avg_Return')
-                for _, row in buy_opps.iterrows():
-                    logger.info(f"{row['Symbol']:<6} | Return: {row['Avg_Return']:,.2f}% | Volatility: {row['Volatility']:,.2f}%")
-                
-                logger.info("\nTop 5 Sell Signals:")
-                sell_opps = market_df[market_df['Latest_Signal'] == -1].nsmallest(5, 'Avg_Return')
-                for _, row in sell_opps.iterrows():
-                    logger.info(f"{row['Symbol']:<6} | Return: {row['Avg_Return']:,.2f}% | Volatility: {row['Volatility']:,.2f}%")
+                print(f"\n{Fore.WHITE}📈 MARKET SUMMARY{Style.RESET_ALL}")
+                print(f"Stocks Scanned: {len(market_df)} | Active Signals: {total_signals}")
+                print(f"Avg Return: {avg_return:.1f}% | Avg Volatility: {avg_vol:.1f}%")
+            
+            print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
                     
         except Exception as e:
             logger.error(f"Error displaying metrics: {str(e)}")
@@ -332,18 +328,47 @@ class AlpacaTrader:
             account = self.trading_client.get_account()
             positions = self.trading_client.get_all_positions()
             
-            for position in positions:
-                logger.info(f"\n{position.symbol}:")
-                logger.info(f"Side: {position.side}")
-                logger.info(f"Quantity: {position.qty}")
-                logger.info(f"Market Value: ${float(position.market_value):,.2f}")
-                logger.info(f"Unrealized P/L: ${float(position.unrealized_pl):,.2f}")
-
-            logger.info("\n=== Portfolio Status ===")
-            logger.info(f"Equity: ${float(account.equity):,.2f}")
-            logger.info(f"Buying Power: ${float(account.buying_power):,.2f}")
-            logger.info(f"Total Account Value: {float(account.equity) + float(account.buying_power):,.2f}")
-            logger.info(f"Number of Positions: {len(positions)}")
+            print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+            print(f"{Fore.CYAN}💼 PORTFOLIO STATUS{Style.RESET_ALL}")
+            print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
+            
+            # Account summary
+            equity = float(account.equity)
+            buying_power = float(account.buying_power)
+            daily_pnl = float(account.equity) - float(account.last_equity) if hasattr(account, 'last_equity') else 0
+            
+            print(f"{Fore.WHITE}💰 Equity:{Style.RESET_ALL} ${equity:,.2f}")
+            print(f"{Fore.WHITE}💳 Buying Power:{Style.RESET_ALL} ${buying_power:,.2f}")
+            
+            daily_pnl_color = Fore.GREEN if daily_pnl >= 0 else Fore.RED
+            daily_pnl_symbol = "📈" if daily_pnl >= 0 else "📉"
+            print(f"{Fore.WHITE}📊 Daily P&L:{Style.RESET_ALL} {daily_pnl_color}{daily_pnl_symbol} ${daily_pnl:,.2f}{Style.RESET_ALL}")
+            print(f"{Fore.WHITE}📍 Positions:{Style.RESET_ALL} {len(positions)}/{self.max_positions}")
+            
+            # Individual positions
+            if positions:
+                print(f"\n{Fore.YELLOW}📋 ACTIVE POSITIONS:{Style.RESET_ALL}")
+                print(f"{Fore.YELLOW}{'-'*50}{Style.RESET_ALL}")
+                
+                total_unrealized = 0
+                for position in positions:
+                    unrealized_pnl = float(position.unrealized_pl)
+                    total_unrealized += unrealized_pnl
+                    
+                    pnl_color = Fore.GREEN if unrealized_pnl >= 0 else Fore.RED
+                    pnl_symbol = "📈" if unrealized_pnl >= 0 else "📉"
+                    side_emoji = "🟢" if position.side == 'long' else "🔴"
+                    
+                    print(f"{side_emoji} {position.symbol} | {position.side.upper()} | {position.qty} shares")
+                    print(f"   💵 Value: ${float(position.market_value):,.2f} | {pnl_color}{pnl_symbol} P&L: ${unrealized_pnl:,.2f}{Style.RESET_ALL}")
+                
+                total_pnl_color = Fore.GREEN if total_unrealized >= 0 else Fore.RED
+                total_pnl_symbol = "📈" if total_unrealized >= 0 else "📉"
+                print(f"\n{Fore.WHITE}💯 Total Unrealized P&L:{Style.RESET_ALL} {total_pnl_color}{total_pnl_symbol} ${total_unrealized:,.2f}{Style.RESET_ALL}")
+            else:
+                print(f"\n{Fore.YELLOW}📭 No active positions{Style.RESET_ALL}")
+            
+            print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
                 
         except Exception as e:
             logger.error(f"Error displaying portfolio status: {str(e)}")
@@ -395,12 +420,80 @@ class AlpacaTrader:
         """Generate and display performance report"""
         try:
             report = self.performance_tracker.generate_daily_report()
-            logger.info("Daily Performance Report:")
-            logger.info(report)
+            print("Daily Performance Report:")
+            print(report)
             return report
         except Exception as e:
             logger.error(f"Error generating performance report: {str(e)}")
             return None
+
+    def display_strategy_info(self):
+        """Display comprehensive strategy configuration and settings"""
+        try:
+            print(f"\n{Fore.MAGENTA}{'='*60}{Style.RESET_ALL}")
+            print(f"{Fore.MAGENTA}🎯 STRATEGY CONFIGURATION{Style.RESET_ALL}")
+            print(f"{Fore.MAGENTA}{'='*60}{Style.RESET_ALL}")
+            
+            # Strategy basics
+            print(f"{Fore.WHITE}📈 Strategy:{Style.RESET_ALL} {self.strategy_name}")
+
+            # Strategy parameters
+            print(f"\n{Fore.YELLOW}⚙️  STRATEGY PARAMETERS{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}{'-'*40}{Style.RESET_ALL}")
+            if hasattr(self.strategy, 'fast_ema'):
+                print(f"Fast EMA: {self.strategy.fast_ema} periods")
+                print(f"Slow EMA: {self.strategy.slow_ema} periods")
+                print(f"ATR Period: {self.strategy.atr_period} periods")
+                print(f"Volume Period: {self.strategy.volume_period} periods")
+                print(f"Volume Threshold: {self.strategy.volume_threshold}x")
+                print(f"Stop Loss: {self.strategy.atr_stop_multiplier}x ATR")
+                print(f"Profit Target: {self.strategy.atr_target_multiplier}x ATR")
+            
+            # Trading configuration
+            print(f"\n{Fore.CYAN}🎛️  TRADING CONFIGURATION{Style.RESET_ALL}")
+            print(f"{Fore.CYAN}{'-'*40}{Style.RESET_ALL}")
+            print(f"Position Size: {self.position_size*100:.0f}% per trade")
+            print(f"Max Positions: {self.max_positions}")
+            print(f"Data Lookback: 100 days")
+            print(f"Trading Mode: {'Paper' if True else 'Live'}")
+            
+            # Universe breakdown
+            print(f"\n{Fore.GREEN}🌍 STOCK UNIVERSE{Style.RESET_ALL}")
+            print(f"{Fore.GREEN}{'-'*40}{Style.RESET_ALL}")
+            total_stocks = sum(len(symbols) for symbols in self.stock_universe.values())
+            print(f"Total Stocks: {total_stocks}")
+            for sector, symbols in self.stock_universe.items():
+                print(f"{sector}: {len(symbols)} stocks ({', '.join(symbols[:3])}{'...' if len(symbols) > 3 else ''})")
+            
+            # Risk management
+            print(f"\n{Fore.RED}🛡️  RISK MANAGEMENT{Style.RESET_ALL}")
+            print(f"{Fore.RED}{'-'*40}{Style.RESET_ALL}")
+            print(f"Dynamic stop losses via ATR")
+            print(f"Volume confirmation required")
+            print(f"Breakout confirmation required")
+            print(f"Position sizing limits exposure")
+            print(f"Diversification across {len(self.stock_universe)} sectors")
+            
+            # Current market context
+            try:
+                account = self.trading_client.get_account()
+                positions = self.trading_client.get_all_positions()
+                available_slots = self.max_positions - len(positions)
+                
+                print(f"\n{Fore.BLUE}📊 CURRENT STATUS{Style.RESET_ALL}")
+                print(f"{Fore.BLUE}{'-'*40}{Style.RESET_ALL}")
+                print(f"Account Equity: ${float(account.equity):,.2f}")
+                print(f"Active Positions: {len(positions)}/{self.max_positions}")
+                print(f"Available Slots: {available_slots}")
+                print(f"Position Value: ${float(account.equity) * self.position_size:,.2f} per trade")
+                
+            except Exception as e:
+                logger.debug(f"Could not get current status: {str(e)}")
+            
+            print(f"{Fore.MAGENTA}{'='*60}{Style.RESET_ALL}")
+            
+        except Exception as e:
+            logger.error(f"Error displaying strategy info: {str(e)}")
 
 # Example usage
 if __name__ == "__main__":
@@ -428,10 +521,10 @@ if __name__ == "__main__":
     
     # Run trading loop
     try:
-        print("Starting paper trading with RobustTrend strategy...")
-        trader.run_trading_loop()
+        print(f"{Fore.MAGENTA}🎯 Starting paper trading with RobustTrend strategy...{Style.RESET_ALL}")
+        trader.run()
     except KeyboardInterrupt:
-        print("\nTrading stopped by user")
+        print(f"\n{Fore.YELLOW}⚠️  Trading stopped by user{Style.RESET_ALL}")
     except Exception as e:
-        print(f"Trading error: {e}")
+        print(f"{Fore.RED}❌ Trading error: {e}{Style.RESET_ALL}")
         logger.error(f"Trading error: {e}")
